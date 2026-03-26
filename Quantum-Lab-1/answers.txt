@@ -1,0 +1,70 @@
+===============================================================================
+  RÉPONSES AUX REMARQUES DU PROJET
+===============================================================================
+
+1) generate_complete_search_space() pour MaxCut et TSP
+------------------------------------------------------
+Cette méthode était déjà implémentée dans les deux classes :
+  - MaxCutProblem : génère toutes les combinaisons {-1, +1}^n pour les nœuds.
+  - TspProblem : génère toutes les permutations des villes en fixant la ville 0
+    comme point de départ pour éviter les rotations identiques.
+
+
+2) Notebook Google Colab du TP 1
+---------------------------------
+Le notebook du TP 1 doit être placé dans le répertoire Notebook/.
+(Non disponible dans les fichiers fournis — à ajouter manuellement.)
+
+
+3) Comment rendre LocalSearch et RandomLocalSearch compatibles avec tout type
+   de problème d'optimisation ?
+------------------------------------------------------------------------------
+Le problème initial :
+  - local_search() et random_local_search() généraient des solutions initiales
+    aléatoires en dur sous forme de listes binaires [0, 1]^n, ce qui ne
+    fonctionnait qu'avec QuboProblem.
+  - Elles nécessitaient gen_neighbor_sol(), méthode uniquement présente dans
+    QuboProblem.
+
+La solution appliquée :
+  a) Ajout de generate_random_solution() à chaque classe de problème :
+     - MaxCutProblem : retourne un dictionnaire {s_i: ±1} aléatoire.
+     - IsingProblem  : retourne un dictionnaire {s_i: ±1} aléatoire.
+     - QuboProblem   : retourne une liste [0/1]^n aléatoire.
+     - KnapsackProblem : retourne une liste [0/1]^n aléatoire.
+     - TspProblem    : retourne une permutation aléatoire des villes (fixant 0).
+
+  b) Ajout de gen_neighbor_sol(solution) à chaque classe (sauf QUBO qui l'avait
+     déjà) :
+     - MaxCutProblem   : inverse un spin aléatoire (s_i -> -s_i).
+     - IsingProblem    : inverse un spin aléatoire (s_i -> -s_i).
+     - KnapsackProblem : inverse un bit aléatoire (x_i -> 1-x_i).
+     - TspProblem      : échange deux villes aléatoires (swap, en excluant la
+                          ville de départ 0).
+
+  c) Modification de local_search() et random_local_search() :
+     - Remplacement de la génération de solution initiale codée en dur par
+       problem.generate_random_solution().
+     - Cela rend les algorithmes compatibles avec TOUT problème implémentant
+       l'interface : eval(), generate_random_solution(), gen_neighbor_sol().
+
+
+4) Pourquoi random_search ne scale pas ? Modifications appliquées.
+-------------------------------------------------------------------
+Le problème :
+  L'ancienne version appelait problem.generate_complete_search_space() pour
+  générer TOUTES les solutions possibles en mémoire, puis en tirait au hasard
+  avec random.choice(). L'espace de recherche croît exponentiellement :
+    - Pour QUBO/Knapsack/MaxCut/Ising : 2^n solutions.
+    - Pour TSP : (n-1)! permutations.
+  Dès que n dépasse ~25-30, l'espace entier ne tient plus en mémoire et sa
+  génération prend un temps prohibitif.
+
+La solution appliquée :
+  Au lieu de pré-générer tout l'espace, on génère chaque solution aléatoire
+  à la volée en appelant problem.generate_random_solution() à chaque itération.
+  Cela permet de traiter des instances de grande taille car :
+    - La complexité mémoire passe de O(2^n) à O(n) (une seule solution en
+      mémoire à la fois).
+    - La complexité temporelle est O(n_iterations * coût_eval) au lieu de
+      O(2^n + n_iterations * coût_eval).
